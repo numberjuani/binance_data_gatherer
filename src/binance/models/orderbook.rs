@@ -108,26 +108,6 @@ pub struct OrderbookMessage {
     #[serde(rename = "pu")]
     pub prev_last_update_id: Option<i64>,
 }
-impl OrderbookMessage {
-    pub fn to_csv_format(&self) -> Vec<UpdateCSVFormat> {
-        let mut output = Vec::new();
-        for ask in &self.asks {
-            output.push(UpdateCSVFormat {
-                timestamp: self.time,
-                price: ask.price,
-                quantity: -ask.size,
-            });
-        }
-        for bid in &self.bids {
-            output.push(UpdateCSVFormat {
-                timestamp: self.time,
-                price: bid.price,
-                quantity: bid.size,
-            });
-        }
-        output
-    }
-}
 mod orderbook_serde {
     use rust_decimal::Decimal;
     use serde::{self, Deserialize, Deserializer};

@@ -1,14 +1,11 @@
-use std::sync::Arc;
 use log::error;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde_json::Value;
-use tokio::sync::RwLock;
 use crate::binance::models::orderbook::{OrderBooksRWL, OrderbookMessage, OrderBook};
 
-pub async fn handle_depth_update_message(message: Value, orderbooks_rwl: OrderBooksRWL,update_messages_rwl:Arc<RwLock<Vec<OrderbookMessage>>>) {
+pub async fn handle_depth_update_message(message: Value, orderbooks_rwl: OrderBooksRWL) {
     match serde_json::from_value::<OrderbookMessage>(message) {
         Ok(update) => {
-            update_messages_rwl.write().await.push(update.clone());
             let books = orderbooks_rwl.read().await.clone();
             match books.contains_key(&update.symbol) {
                 true => {

@@ -3,14 +3,14 @@ use std::fmt::Formatter;
 use serde::Serialize;
 use serde::Deserialize;
 use serde_json::json;
-use crate::binance::constants::COIN_M_BASE_HTTP_ENDPOINT;
+
 use crate::binance::constants::COIN_M_BASE_WS_ENDPOINT;
-use crate::binance::constants::OPTIONS_BASE_HTTP_ENDPOINT;
+
 use crate::binance::constants::OPTIONS_BASE_WS_ENDPOINT;
-use crate::binance::constants::SPOT_BASE_HTTP_ENDPOINTS;
+
 use crate::binance::constants::SPOT_BASE_WS_ENDPOINTS;
 use crate::binance::constants::Symbol;
-use crate::binance::constants::USDT_M_BASE_HTTP_ENDPOINT;
+
 use crate::binance::constants::USDT_M_BASE_WS_ENDPOINTS;
 
 #[derive(Serialize, Deserialize, Debug,Clone)]
@@ -46,26 +46,26 @@ impl BinanceAssetType {
             }
         }
     }
-    pub fn get_http_base_url_list(&self) -> Vec<String> {
-        match self {
-            BinanceAssetType::Spot => {
-                return SPOT_BASE_HTTP_ENDPOINTS.iter().map(|endpoint| endpoint.to_string()).collect();
-            }
-            BinanceAssetType::Futures(futures_type) => {
-                match futures_type {
-                    FuturesType::USDMargined => {
-                        return USDT_M_BASE_HTTP_ENDPOINT.iter().map(|endpoint| endpoint.to_string()).collect();
-                    }
-                    FuturesType::CoinMargined => {
-                        return COIN_M_BASE_HTTP_ENDPOINT.iter().map(|endpoint| endpoint.to_string()).collect();
-                    }
-                }
-            }
-            BinanceAssetType::Options => {
-                return OPTIONS_BASE_HTTP_ENDPOINT.iter().map(|endpoint| endpoint.to_string()).collect();
-            }
-        }
-    }
+    // pub fn get_http_base_url_list(&self) -> Vec<String> {
+    //     match self {
+    //         BinanceAssetType::Spot => {
+    //             return SPOT_BASE_HTTP_ENDPOINTS.iter().map(|endpoint| endpoint.to_string()).collect();
+    //         }
+    //         BinanceAssetType::Futures(futures_type) => {
+    //             match futures_type {
+    //                 FuturesType::USDMargined => {
+    //                     return USDT_M_BASE_HTTP_ENDPOINT.iter().map(|endpoint| endpoint.to_string()).collect();
+    //                 }
+    //                 FuturesType::CoinMargined => {
+    //                     return COIN_M_BASE_HTTP_ENDPOINT.iter().map(|endpoint| endpoint.to_string()).collect();
+    //                 }
+    //             }
+    //         }
+    //         BinanceAssetType::Options => {
+    //             return OPTIONS_BASE_HTTP_ENDPOINT.iter().map(|endpoint| endpoint.to_string()).collect();
+    //         }
+    //     }
+    // }
 }
 impl Display for BinanceAssetType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -97,21 +97,21 @@ pub enum Stream {
     Trade(Symbol),
     BookTicker(Symbol),
 }
-impl Stream {
-    pub fn get_symbol(&self) -> Symbol {
-        match self {
-            Stream::Depth(symbol,_) => {
-                symbol.clone()
-            }
-            Stream::Trade(symbol) => {
-                symbol.clone()
-            }
-            Stream::BookTicker(symbol) => {
-                symbol.clone()
-            }
-        }
-    }
-}
+// impl Stream {
+//     pub fn get_symbol(&self) -> Symbol {
+//         match self {
+//             Stream::Depth(symbol,_) => {
+//                 symbol.clone()
+//             }
+//             Stream::Trade(symbol) => {
+//                 symbol.clone()
+//             }
+//             Stream::BookTicker(symbol) => {
+//                 symbol.clone()
+//             }
+//         }
+//     }
+// }
 impl Display for Stream {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -143,20 +143,20 @@ impl DataRequest {
         let individual_streams = self.streams.iter().map(|stream| stream.to_string()).collect::<Vec<String>>();
         json!({"method":"SUBSCRIBE","params":individual_streams,"id":1}).to_string()
     }
-    pub fn get_http_base_url_list(&self) -> Vec<String> {
-        self.asset_type.get_http_base_url_list()
-    }
-    pub fn get_orderbook_endpoint(&self) -> Vec<String> {
-        let path = match self.asset_type {
-            BinanceAssetType::Spot => "/api/v3/depth",
-            BinanceAssetType::Futures(_) => {
-                match FuturesType::USDMargined {
-                    FuturesType::USDMargined => "/fapi/v1/depth",
-                    FuturesType::CoinMargined => "/dapi/v1/depth",
-                }
-            }
-            BinanceAssetType::Options => "/eapi/v1/depth",
-        };
-        return self.get_http_base_url_list().iter().map(|base_url| url::Url::parse(&format!("{}{}",base_url,path)).unwrap().to_string()).collect();
-    }
+    // pub fn get_http_base_url_list(&self) -> Vec<String> {
+    //     self.asset_type.get_http_base_url_list()
+    // }
+    // pub fn get_orderbook_endpoint(&self) -> Vec<String> {
+    //     let path = match self.asset_type {
+    //         BinanceAssetType::Spot => "/api/v3/depth",
+    //         BinanceAssetType::Futures(_) => {
+    //             match FuturesType::USDMargined {
+    //                 FuturesType::USDMargined => "/fapi/v1/depth",
+    //                 FuturesType::CoinMargined => "/dapi/v1/depth",
+    //             }
+    //         }
+    //         BinanceAssetType::Options => "/eapi/v1/depth",
+    //     };
+    //     return self.get_http_base_url_list().iter().map(|base_url| url::Url::parse(&format!("{}{}",base_url,path)).unwrap().to_string()).collect();
+    // }
 }

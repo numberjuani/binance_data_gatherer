@@ -10,19 +10,19 @@ use std::sync::Arc;
 use tokio::{net::TcpStream, sync::RwLock};
 use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
-use crate::binance::{models::{orderbook::{OrderBooksRWL, OrderbookMessage}, trades::Trade}, websocket::handlers::book_ticker::handle_book_ticker};
+use crate::binance::{models::{orderbook::{OrderBooksRWL}, trades::Trade}, websocket::handlers::book_ticker::handle_book_ticker};
 
-use super::{requests::DataRequest, handlers::{depth_update::handle_depth_update_message, trades::handle_trades}};
+use super::{handlers::{depth_update::handle_depth_update_message, trades::handle_trades}, requests::DataRequest};
 
 type OutgoingSocket = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
 type IncomingSocket = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 /// Establishes a websocket connection to Binance and persists it for the duration of the program.
 /// If disconnected, it will attempt to reconnect uo to 5 times at an ever-increasing interval up to 26 seconds.
 /// It will try a max of 5 times before exiting the program.
-pub async fn establish_and_persist(requests: DataRequest, orderbooks_rwl:OrderBooksRWL,update_messages_rwl:Arc<RwLock<Vec<OrderbookMessage>>>,trade_updates_rwl:Arc<RwLock<Vec<Trade>>>) {
+pub async fn establish_and_persist(requests: DataRequest, orderbooks_rwl:OrderBooksRWL,trade_updates_rwl:Arc<RwLock<Vec<Trade>>>) {
     let mut bad_attempts = 0;
     loop {
-        if establish(requests.clone(),orderbooks_rwl.clone(),update_messages_rwl.clone(),trade_updates_rwl.clone()).await {
+        if establish(requests.clone(),orderbooks_rwl.clone(),trade_updates_rwl.clone()).await {
             bad_attempts += 1;
         } else {
             bad_attempts = 0;
@@ -35,7 +35,7 @@ pub async fn establish_and_persist(requests: DataRequest, orderbooks_rwl:OrderBo
     }
 }
 /// Establishes a single websocket connection to Binance. Returns true if there was an error.
-async fn establish(request: DataRequest,orderbooks_rwl:OrderBooksRWL,update_messages_rwl:Arc<RwLock<Vec<OrderbookMessage>>>,trade_updates_rwl:Arc<RwLock<Vec<Trade>>>) -> bool {
+async fn establish(request: DataRequest,orderbooks_rwl:OrderBooksRWL,trade_updates_rwl:Arc<RwLock<Vec<Trade>>>) -> bool {
     for endpoint in request.get_ws_urls().iter() {
         info!("Attempting WS connection to {}", endpoint);
         match tokio_tungstenite::connect_async(endpoint).await {
@@ -50,7 +50,6 @@ async fn establish(request: DataRequest,orderbooks_rwl:OrderBooksRWL,update_mess
                         close.clone(),
                         ping_pong.clone(),
                         orderbooks_rwl.clone(),
-                        update_messages_rwl.clone(),
                         trade_updates_rwl.clone()
                     )),
                     tokio::spawn(process_outgoing_message(
@@ -84,7 +83,6 @@ async fn process_incoming_message(
     close: Arc<tokio::sync::RwLock<bool>>,
     ping_pong: Arc<tokio::sync::RwLock<bool>>,
     orderbooks_rwl:OrderBooksRWL,
-    update_messages_rwl:Arc<RwLock<Vec<OrderbookMessage>>>,
     trade_updates_rwl:Arc<RwLock<Vec<Trade>>>
 ) {
     receiver
@@ -100,7 +98,7 @@ async fn process_incoming_message(
                             Ok(unrouted_message) => match unrouted_message.contains_key("data") {
                                 true => match unrouted_message["data"]["e"].as_str().unwrap() {
                                     "depthUpdate" => {
-                                        handle_depth_update_message(unrouted_message["data"].clone(), orderbooks_rwl.clone(),update_messages_rwl.clone()).await;
+                                        handle_depth_update_message(unrouted_message["data"].clone(), orderbooks_rwl.clone()).await;
                                     }
                                     "trade" => {
                                         handle_trades(unrouted_message["data"].clone(), trade_updates_rwl.clone()).await;

@@ -7,6 +7,7 @@ use rust_decimal::Decimal;
 #[serde_as]
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct Trade {
     #[serde(rename(deserialize = "e"))]
     pub event_type: String,
@@ -32,9 +33,14 @@ pub struct Trade {
     pub buyer_is_the_market_maker: bool,
 }
 impl Trade {
+    pub fn side(&self) -> String {
+        if self.buyer_is_the_market_maker {
+            "SELL".to_string()
+        } else {
+            "BUY".to_string()
+        }
+    }
     pub fn get_data(&self) {
-        let side = if self.buyer_is_the_market_maker { "SELL" } else { "BUY" };
-        let notional = self.price * self.quantity;
-        println!("Side {}, notional {}", side, notional);
+        println!("Trade: {:?} {} {}", self,self.side(),self.price*self.quantity);
     }
 }
