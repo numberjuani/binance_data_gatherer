@@ -40,7 +40,12 @@ impl Trade {
             "BUY".to_string()
         }
     }
+    pub fn calculate_receipt_delay(&self) -> i64 {
+        let now = Utc::now();
+        let delay = now - self.trade_time;
+        delay.num_milliseconds()
+    }
     pub fn get_data(&self) {
-        println!("Trade: {:?} {} {}", self,self.side(),self.price*self.quantity);
+        println!("{} {} ${} ms delay={}", self.symbol,self.side(),self.price*self.quantity,self.calculate_receipt_delay());
     }
 }
