@@ -18,7 +18,7 @@ appenders:
         count: 1000000
         pattern: "logs/my{}.log"
 root:
-  level: info
+  level: debug
   appenders:
     - my_stdout
     - my_file_logger
