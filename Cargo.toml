@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[profile.release]
-opt-level = 3
-lto = true
+# [profile.release]
+# opt-level = 3
+# lto = true
 [dependencies]
 tokio = {version ="1.25.0", features = ["macros","sync","time","rt-multi-thread"]}
-tokio-tungstenite = {version = "0.18.0", features = ["rustls-tls-native-roots"]}
+tokio-tungstenite = {version = "0.18.0", features = ["tokio-native-tls","native-tls"]}
 log = {version = "0.4.17", features = ["std", "serde"] }
 reqwest = {version = "0.11.14", features = ["json"] }
 serde = {version = "1.0.152", features = ["derive"] }
@@ -22,5 +22,3 @@ serde_with = { version = "2.2.0", features = ["chrono"] }
 futures = "0.3.26"
 rayon = "1.6.1"
 rust_decimal = { version = "1.28.1", features = ["serde-with-str"] }
-csv = "1.2.0"
-itertools = "0.10.5"
