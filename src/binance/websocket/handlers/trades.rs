@@ -10,7 +10,7 @@ use crate::binance::models::trades::Trade;
 pub async fn handle_trades(message:Value,trade_updates_rwl:Arc<RwLock<Vec<Trade>>>) {
     match serde_json::from_value::<Trade>(message) {
         Ok(trade) => {
-            trade.get_data();
+            //trade.get_data();
             trade_updates_rwl.write().await.push(trade);
         }
         Err(e) => {

@@ -1,4 +1,3 @@
-
 use chrono::Duration;
 use futures_util::{
     stream::{SplitSink, SplitStream},
@@ -7,22 +6,41 @@ use futures_util::{
 use log::{debug, error, info, warn};
 use serde_json::{Map, Value};
 use std::sync::Arc;
-use tokio::{net::TcpStream, sync::RwLock};
+use tokio::{
+    net::TcpStream,
+    sync::{Notify, RwLock},
+};
 use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
-use crate::binance::{models::{orderbook::{OrderBooksRWL}, trades::Trade}, websocket::handlers::book_ticker::handle_book_ticker};
+use crate::binance::{
+    models::{orderbook::OrderBooksRWL, trades::Trade},
+    websocket::handlers::book_ticker::handle_book_ticker,
+};
 
-use super::{handlers::{depth_update::handle_depth_update_message, trades::handle_trades}, requests::DataRequest};
+use super::{
+    handlers::{depth_update::handle_depth_update_message, trades::handle_trades},
+    requests::DataRequest,
+};
 
 type OutgoingSocket = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
 type IncomingSocket = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 /// Establishes a websocket connection to Binance and persists it for the duration of the program.
 /// If disconnected, it will attempt to reconnect uo to 5 times at an ever-increasing interval up to 26 seconds.
 /// It will try a max of 5 times before exiting the program.
-pub async fn establish_and_persist(requests: DataRequest, orderbooks_rwl:OrderBooksRWL,trade_updates_rwl:Arc<RwLock<Vec<Trade>>>) {
+pub async fn establish_and_persist(
+    requests: DataRequest,
+    orderbooks_rwl: OrderBooksRWL,
+    trade_updates_rwl: Arc<RwLock<Vec<Trade>>>,
+) {
     let mut bad_attempts = 0;
     loop {
-        if establish(requests.clone(),orderbooks_rwl.clone(),trade_updates_rwl.clone()).await {
+        if establish(
+            requests.clone(),
+            orderbooks_rwl.clone(),
+            trade_updates_rwl.clone(),
+        )
+        .await
+        {
             bad_attempts += 1;
         } else {
             bad_attempts = 0;
@@ -35,37 +53,26 @@ pub async fn establish_and_persist(requests: DataRequest, orderbooks_rwl:OrderBo
     }
 }
 /// Establishes a single websocket connection to Binance. Returns true if there was an error.
-async fn establish(request: DataRequest,orderbooks_rwl:OrderBooksRWL,trade_updates_rwl:Arc<RwLock<Vec<Trade>>>) -> bool {
+async fn establish(
+    request: DataRequest,
+    orderbooks_rwl: OrderBooksRWL,
+    trade_updates_rwl: Arc<RwLock<Vec<Trade>>>,
+) -> bool {
     for endpoint in request.get_ws_urls().iter() {
         info!("Attempting WS connection to {}", endpoint);
         match tokio_tungstenite::connect_async(endpoint).await {
-            Ok((stream, _)) => {
-                info!("Connected to {endpoint}");
+            Ok((stream, response)) => {
+                info!("Connected to {endpoint} status: {}", response.status());
                 let (sender, receiver) = stream.split();
-                let close = Arc::new(tokio::sync::RwLock::new(false));
-                let ping_pong = Arc::new(tokio::sync::RwLock::new(false));
-                match tokio::try_join!(
-                    tokio::spawn(process_incoming_message(
-                        receiver,
-                        close.clone(),
-                        ping_pong.clone(),
-                        orderbooks_rwl.clone(),
-                        trade_updates_rwl.clone()
-                    )),
-                    tokio::spawn(process_outgoing_message(
-                        sender,
-                        close,
-                        ping_pong,
-                        request.clone()
-                    )),
-                ) {
-                    Ok(_) => {
-                        info!("Connection closed");
-                        return false;
+                let ping_pong = Arc::new(Notify::new());
+                tokio::select! {
+                    _= process_incoming_message(receiver, ping_pong.clone(),orderbooks_rwl.clone(),trade_updates_rwl.clone()) => {
+                        error!("Incoming message processing failed");
+                        return true;
                     }
-                    Err(e) => {
-                        error!("Disconnected from Binance websocket: {:?}", e);
-                        continue;
+                    _= process_outgoing_message(sender, ping_pong.clone(),request.clone()) => {
+                        error!("Outgoing message processing failed");
+                        return true;
                     }
                 }
             }
@@ -80,16 +87,12 @@ async fn establish(request: DataRequest,orderbooks_rwl:OrderBooksRWL,trade_updat
 
 async fn process_incoming_message(
     receiver: IncomingSocket,
-    close: Arc<tokio::sync::RwLock<bool>>,
-    ping_pong: Arc<tokio::sync::RwLock<bool>>,
-    orderbooks_rwl:OrderBooksRWL,
-    trade_updates_rwl:Arc<RwLock<Vec<Trade>>>
+    ping_pong: Arc<Notify>,
+    orderbooks_rwl: OrderBooksRWL,
+    trade_updates_rwl: Arc<RwLock<Vec<Trade>>>,
 ) {
     receiver
         .for_each(|message| async {
-            if *close.read().await {
-                return;
-            }
             match message {
                 Ok(text_message) => match text_message {
                     Message::Text(text_message) => {
@@ -98,10 +101,18 @@ async fn process_incoming_message(
                             Ok(unrouted_message) => match unrouted_message.contains_key("data") {
                                 true => match unrouted_message["data"]["e"].as_str().unwrap() {
                                     "depthUpdate" => {
-                                        handle_depth_update_message(unrouted_message["data"].clone(), orderbooks_rwl.clone()).await;
+                                        handle_depth_update_message(
+                                            unrouted_message["data"].clone(),
+                                            orderbooks_rwl.clone(),
+                                        )
+                                        .await;
                                     }
                                     "trade" => {
-                                        handle_trades(unrouted_message["data"].clone(), trade_updates_rwl.clone()).await;
+                                        handle_trades(
+                                            unrouted_message["data"].clone(),
+                                            trade_updates_rwl.clone(),
+                                        )
+                                        .await;
                                     }
                                     "bookTicker" => {
                                         handle_book_ticker(unrouted_message["data"].clone()).await;
@@ -134,14 +145,12 @@ async fn process_incoming_message(
                     }
                     Message::Ping(_) => {
                         info!("Received ping");
-                        let mut ping_pong = ping_pong.write().await;
-                        *ping_pong = true;
+                        ping_pong.notify_one();
                     }
                     Message::Pong(_) => {}
                     Message::Close(cf) => {
                         warn!("Close received {cf:?}");
-                        let mut close = close.write().await;
-                        *close = true;
+                        return;
                     }
                     Message::Frame(_) => {
                         warn!("Frame received");
@@ -149,8 +158,7 @@ async fn process_incoming_message(
                 },
                 Err(e) => {
                     warn!("Error receiving message: {:?}", e);
-                    let mut close = close.write().await;
-                    *close = true;
+                    return;
                 }
             }
         })
@@ -159,8 +167,7 @@ async fn process_incoming_message(
 
 async fn process_outgoing_message(
     mut sender: OutgoingSocket,
-    close: Arc<tokio::sync::RwLock<bool>>,
-    ping_pong: Arc<tokio::sync::RwLock<bool>>,
+    ping_pong: Arc<tokio::sync::Notify>,
     request: DataRequest,
 ) {
     let sub_message = request.get_subscribe_message();
@@ -173,19 +180,13 @@ async fn process_outgoing_message(
         }
     }
     loop {
-        if *close.read().await {
-            break;
-        }
-        if *ping_pong.read().await {
-            match sender.send(Message::Pong(vec![])).await {
-                Ok(_) => {
-                    info!("Sent pong");
-                    let mut ping_pong = ping_pong.write().await;
-                    *ping_pong = false;
-                }
-                Err(e) => {
-                    error!("{:?}", e);
-                }
+        ping_pong.notified().await;
+        match sender.send(Message::Pong(vec![])).await {
+            Ok(_) => {
+                info!("Sent pong");
+            }
+            Err(e) => {
+                error!("{:?}", e);
             }
         }
     }

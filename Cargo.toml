@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-# [profile.release]
-# opt-level = 3
-# lto = true
+[profile.release]
+opt-level = 3
+lto = true
 [dependencies]
 tokio = {version ="1.25.0", features = ["macros","sync","time","rt-multi-thread"]}
 tokio-tungstenite = {version = "0.18.0", features = ["tokio-native-tls","native-tls"]}
